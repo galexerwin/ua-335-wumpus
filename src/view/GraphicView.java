@@ -1,11 +1,11 @@
 /*
  * Author: Alex Erwin
- * Purpose: Text (GridView) is a simple drawString gridView.
+ * Purpose: Graphics view handler. Makes the game more interesting with images of the obstacles.
  * Utilizes a private inner class to display the game. The game is in an upper pane and the controls are in a lower pane.
  */
 // package definition
 package view;
-//import classes
+// import classes
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -14,25 +14,27 @@ import java.io.*;
 import javax.imageio.*;
 import java.util.*;
 import javax.swing.*;
+
 import model.WumpusGame;
-//this has view has a text grid
-public class GridView extends JPanel implements Observer {
+import model.WumpusGameSpace;
+// this has view has the images
+public class GraphicView extends JPanel implements Observer {
 	// instance variables
 	private JPanel upper, lower;
 	private JLabel gameMessageOut;
 	private WumpusGame theGame;
 	private int height, width;
 	private int gameHeight, controlsHeight;
-	// constructor
-	public GridView(WumpusGame theGame, int width, int height) {
+	// constructor which initializes the GraphicPanel and adds a mouse listener
+	public GraphicView(WumpusGame theGame, int width, int height) {
 		// import the game
 		this.theGame = theGame;
 		// set dimensions
 		this.width   = width;
 		this.height  = height;
 		// initialize the game board
-		initializeGraphicPanel();		
-	}
+		initializeGraphicPanel();
+	}	
 	// setup the panel with once needed settings
 	public void initializeGraphicPanel() {
 		// variables
@@ -49,6 +51,8 @@ public class GridView extends JPanel implements Observer {
 		lower = new JPanel(); // for the controls
 		moveButtons = new JPanel();
 		shootButtons = new JPanel();
+		// set the background color for game
+		upper.setBackground(Color.BLACK);
 		// set dimensions
 		upper.setPreferredSize(new Dimension(width, this.gameHeight));
 		// set features for the lower panel
@@ -61,7 +65,7 @@ public class GridView extends JPanel implements Observer {
 		shootButtons.setLayout(new BorderLayout());
 		// set the message label
 		this.gameMessageOut = new JLabel("", JLabel.CENTER);
-		this.gameMessageOut.setForeground(Color.BLACK);
+		this.gameMessageOut.setForeground(Color.YELLOW);
 		this.gameMessageOut.setFont(new Font("Serif", Font.BOLD, 40));
 		// new labels
 		moveButtonLabel = new JLabel("Move Hunter (by Direction)");
@@ -125,7 +129,7 @@ public class GridView extends JPanel implements Observer {
 		// add panels to the main
 		this.add(upper);
 		this.add(lower);
-	}		
+	}	
 	@Override
 	public void update(Observable theWumpusGame, Object gameOver) {
 		// repaint the upper section
@@ -179,6 +183,8 @@ public class GridView extends JPanel implements Observer {
 		private int gameSize; // placement dimensions
 		private int cellWidth, cellHeight; // placement dimensions
 		private Point[][] cells; // cell locations, not really important in this version
+		private BufferedImage[] icons; // images to use in the game
+		private String[] iconPath; // paths to icons
 		// constructor
 		public GameWindow(int width, int height) {
 			// set the size of the game
@@ -186,8 +192,30 @@ public class GridView extends JPanel implements Observer {
 			// set the cell width and height
 			this.cellWidth = ((width / gameSize));
 			this.cellHeight = ((height / gameSize));		
+			// load the game images
+			loadGameImages();
 			// load the game cells
 			loadGameCells();			
+		}
+		// load the game images
+		public void loadGameImages() {
+			// create image table
+			this.icons = new BufferedImage[7];
+			// store the image paths in here to loop create
+			this.iconPath = new String[7];
+			// store each path in a very specific order
+			this.iconPath[0] = "images/Wumpus.png";
+			this.iconPath[1] = "images/TheHunter.png";
+			this.iconPath[2] = "images/Blood.png";
+			this.iconPath[3] = "images/Goop.png";
+			this.iconPath[4] = "images/Ground.png";
+			this.iconPath[5] = "images/Slime.png";
+			this.iconPath[6] = "images/SlimePit.png";
+			// store each of the images from the paths in our image icon array
+			try { // wrap in a try catch because of the possible IOException
+				for(int i = 0; i < this.iconPath.length; i++)
+					this.icons[i] = ImageIO.read(new File(this.iconPath[i]));			
+			} catch (IOException e) {}			
 		}
 		// load game table cells
 		public void loadGameCells() {
@@ -205,35 +233,62 @@ public class GridView extends JPanel implements Observer {
 		@Override
 		public void paintComponent(Graphics g) {
 			// variables
+			BufferedImage img = null;								// icon images
 			Point hunterCurrent = theGame.getLocationOfHunter(); 	// get the location
+			WumpusGameSpace[][] realOccupants = theGame.getBoard(); // get the real occupants
 			char[][] board; 										// get the board
+			int occupantWidth = (int)(this.cellWidth * .75);		// set the occupant width to 75% of the space
+			int occupantHeight = (int)(this.cellHeight * .75);		// set the occupant height to 75% of the space
 			int occupantX = 0, occupantY = 0;						// occupant X, Y
+			int groundX = 0, groundY = 0;							// ground X, Y
 			// allow the UI to paint the background
 			super.paintComponent(g); 
 			// pass to the 2D subclass
 			Graphics2D g2 = (Graphics2D) g;
 			// determine which map to show
-			if (theGame.isGameOver()) {
+			if (theGame.isGameOver())
 				board = theGame.getAllTokensMap();
-			} else
+			else
 				board = theGame.getFogOfWarMap();
 			// fill the board
 			for (int row = 0; row < this.gameSize; row++) {
 				for (int col = 0; col < this.gameSize; col++) {
-					// placement of the occupant is different than the ground
-					occupantX = cells[row][col].x - this.cellWidth + (this.cellWidth / 4);
-					occupantY = cells[row][col].y - this.cellHeight + (this.cellHeight / 4);
-					// determine if the hunter should be in this spot
-					if (hunterCurrent.equals(new Point(row, col)))
-						g2.drawString("[O]", occupantX, occupantY);
-					else
-						g2.drawString("[" + Character.toString(board[row][col]) + "]", occupantX, occupantY);
+					if (!(board[row][col] == 'X')) {
+						// reset to display both the occupant and the hunter
+						if (board[row][col] == 'H')
+							board[row][col] = realOccupants[row][col].getOccupant();
+						// reset image to null
+						img = null;
+						// determine what to draw
+						switch(board[row][col]) {
+						case 'W': img = this.icons[0]; break;
+						case 'B': img = this.icons[2]; break;
+						case 'G': img = this.icons[3]; break;
+						case 'S': img = this.icons[5]; break;
+						case 'P': img = this.icons[6]; break;					
+						}						
+						// placement of the occupant is different than the ground
+						occupantX = cells[row][col].x - this.cellWidth + (this.cellWidth / 4);
+						occupantY = cells[row][col].y - this.cellHeight + (this.cellHeight / 4);
+						// placement of the ground is different than the occupants
+						groundX = cells[row][col].x - this.cellWidth;
+						groundY = cells[row][col].y - this.cellHeight;
+						// always draw the ground
+						g2.drawImage(this.icons[4], groundX, groundY, this.cellWidth, this.cellHeight, Color.BLACK, null);
+						// draw image on the stage
+						if (!(img == null))
+							g2.drawImage(img, occupantX, occupantY, occupantWidth, occupantHeight, null);
+						// determine if the hunter should be in this spot
+						if (hunterCurrent.equals(new Point(row, col)))
+							g2.drawImage(this.icons[1], occupantX, occupantY, (int)(occupantWidth * .9), (int)(occupantHeight * .9), null);
+					}
 				}
 			}
-			// get any messages
-			gameMessageOut.setText(theGame.getGameMessage());
+			// get any messages but only if it is game over
+			if (theGame.isGameOver())
+				gameMessageOut.setText(theGame.getGameMessage());
 			// draw the game message out label onto the board
 			this.add(gameMessageOut);
 		}		
-	}	
+	}
 }
